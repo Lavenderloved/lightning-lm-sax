@@ -30,7 +30,7 @@ struct OptimizerConfig {
     OptimizerConfig() = default;
     explicit OptimizerConfig(AlgorithmType algo_type,
                              LinearSolverType linear_type = LinearSolverType::LINEAR_SOLVER_DENSE, bool is_dense = true)
-        : algo_type_(algo_type), is_dense_(is_dense), linear_solver_type_(linear_type) {}
+        : algo_type_(algo_type), linear_solver_type_(linear_type), is_dense_(is_dense) {}
 
     // 优化方法,从Gauss-newton, Levenberg-marquardt, dogleg中选
     AlgorithmType algo_type_ = AlgorithmType::LEVENBERG_MARQUARDT;

@@ -54,6 +54,9 @@ class PangolinWindow {
     /// 用户是否已经退出UI
     bool ShouldQuit();
 
+    /// 渲染一帧（仅用于macOS主线程模式）
+    void RenderOnce();
+
     /// 设置IMU到雷达的外参
     void SetTImuLidar(const SE3& T_imu_lidar);
 

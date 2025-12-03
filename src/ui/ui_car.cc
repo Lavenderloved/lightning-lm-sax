@@ -1,5 +1,10 @@
 #include "ui/ui_car.h"
+
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#elif
 #include <GL/gl.h>
+#endif
 
 namespace lightning::ui {
 

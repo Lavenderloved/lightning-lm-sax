@@ -543,10 +543,16 @@ void UpdateMeanAndCov(int hist_m, int curr_n, const Eigen::Matrix<S, D, 1>& hist
     assert(hist_m > 0);
     assert(curr_n > 0);
     new_mean = (hist_m * hist_mean + curr_n * curr_mean) / (hist_m + curr_n);
+
+    #ifdef __APPLE__
+    new_var = (hist_m * (hist_var + (hist_mean - new_mean) * (hist_mean - new_mean).transpose()) +
+               curr_n * (curr_var + (curr_mean - new_mean) * (curr_mean - new_mean).transpose())) / (hist_m + curr_n);
+    #else
     new_var = (hist_m * (hist_var + (hist_mean - new_mean) * (hist_mean - new_mean).template transpose()) +
                curr_n * (curr_var + (curr_mean - new_mean) * (curr_mean - new_mean).template transpose())) /
               (hist_m + curr_n);
-}
+    #endif  
+            }
 
 /// 将角度保持在正负PI以内
 inline void KeepAngleInPI(double& angle) {

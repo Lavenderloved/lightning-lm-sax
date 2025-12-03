@@ -4,7 +4,12 @@
 
 #include "core/g2p5/g2p5_map.h"
 
+#ifdef __APPLE__
+#include <stdlib.h>
+#else
 #include <malloc.h>
+#endif
+
 #include <cstdlib>
 #include <execution>
 
@@ -239,7 +244,10 @@ void G2P5Map::ReleaseResources() {
     max_x_ = max_y_ = -10000;
 
     grid_size_x_ = grid_size_y_ = 0;
+    // malloc_trim(0);
+#if defined(__linux__)
     malloc_trim(0);
+#endif
 }
 
 nav_msgs::msg::OccupancyGrid G2P5Map::ToROS() {

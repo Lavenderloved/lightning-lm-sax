@@ -13,6 +13,10 @@
 
 #include <opencv2/opencv.hpp>
 
+#ifdef __APPLE__
+#include <dispatch/dispatch.h>
+#endif
+
 DEFINE_string(input_bag, "", "输入数据包");
 DEFINE_string(config, "./config/default.yaml", "配置文件");
 DEFINE_bool(show_grid_map, false, "是否展示栅格地图");
@@ -73,8 +77,15 @@ int main(int argc, char** argv) {
 
                                       if (FLAGS_show_grid_map) {
                                           cv::Mat image = map.GetNewestMap()->ToCV();
+#ifdef __APPLE__
+                                          dispatch_async(dispatch_get_main_queue(), ^{
+                                              cv::imshow("map", image);
+                                              cv::waitKey(10);
+                                          });
+#else
                                           cv::imshow("map", image);
                                           cv::waitKey(10);
+#endif
                                       }
                                   }
 

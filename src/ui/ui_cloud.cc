@@ -1,7 +1,11 @@
 #include "ui/ui_cloud.h"
 #include "common/options.h"
 
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#elif
 #include <GL/gl.h>
+#endif
 #include <numeric>
 
 namespace lightning::ui {

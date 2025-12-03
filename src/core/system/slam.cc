@@ -14,6 +14,10 @@
 #include <filesystem>
 #include <opencv2/opencv.hpp>
 
+#ifdef __APPLE__
+#include <dispatch/dispatch.h>
+#endif
+
 namespace lightning {
 
 SlamSystem::SlamSystem(lightning::SlamSystem::Options options) : options_(options) {
@@ -66,14 +70,28 @@ bool SlamSystem::Init(const std::string& yaml_path) {
         if (options_.with_2dvisualization_) {
             g2p5_->SetMapUpdateCallback([this](g2p5::G2P5MapPtr map) {
                 cv::Mat image = map->ToCV();
+                
+#ifdef __APPLE__
+                // macOS: dispatch GUI operations to main thread
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    cv::imshow("map", image);
+                    
+                    if (options_.step_on_kf_) {
+                        cv::waitKey(0);
+                    } else {
+                        cv::waitKey(10);
+                    }
+                });
+#else
+                // Linux: direct call
                 cv::imshow("map", image);
-
+                
                 if (options_.step_on_kf_) {
                     cv::waitKey(0);
-
                 } else {
                     cv::waitKey(10);
                 }
+#endif
             });
         }
     }
@@ -304,7 +322,21 @@ void SlamSystem::ProcessLidar(const livox_ros_driver2::msg::CustomMsg::SharedPtr
 
 void SlamSystem::Spin() {
     if (options_.online_mode_ && node_ != nullptr) {
+#ifdef __APPLE__
+        // macOS: use non-blocking spinner to allow UI updates on main thread
+        if (ui_) {
+            while (rclcpp::ok() && !ui_->ShouldQuit()) {
+                rclcpp::spin_some(node_);
+                ui_->RenderOnce();
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+        } else {
+            spin(node_);
+        }
+#else
+        // Linux: blocking spin, UI runs in separate thread
         spin(node_);
+#endif
     }
 }
 

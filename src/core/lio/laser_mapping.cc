@@ -512,7 +512,13 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
             Mat3f R_wl = (s.rot_ * s.offset_R_lidar_).matrix().cast<float>();
             Vec3f t_wl = (s.rot_ * s.offset_t_lidar_ + s.pos_).cast<float>();
 
+#ifdef __APPLE__
+#pragma omp parallel for
+            for (size_t idx = 0; idx < index.size(); ++idx) {
+                size_t i = index[idx];
+#else
             std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](const size_t &i) {
+#endif
                 PointType &point_body = scan_down_body_->points[i];
                 PointType &point_world = scan_down_world_->points[i];
 
@@ -546,7 +552,11 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
                         point_selected_surf_[i] = false;
                     }
                 }
+#ifdef __APPLE__
+            }
+#else
             });
+#endif
         },
         "    ObsModel (Lidar Match)");
 
@@ -583,7 +593,13 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
             const Vec3f off_t = s.offset_t_lidar_.cast<float>();
             const Mat3f Rt = s.rot_.matrix().transpose().cast<float>();
 
+#ifdef __APPLE__
+#pragma omp parallel for
+            for (size_t idx = 0; idx < index.size(); ++idx) {
+                size_t i = index[idx];
+#else
             std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](const size_t &i) {
+#endif
                 Vec3f point_this_be = corr_pts_[i].head<3>();
                 Mat3f point_be_crossmat = math::SKEW_SYM_MATRIX(point_this_be);
                 Vec3f point_this = off_R * point_this_be + off_t;
@@ -624,8 +640,12 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
                 obs.residual_(i) = rho;
                 obs.h_x_.block<1, 12>(i, 0) = obs.h_x_.block<1, 12>(i, 0).eval() * drho;
 
-                // obs.residual_(i) = res;
+            // obs.residual_(i) = res;
+#ifdef __APPLE__
+            }
+#else
             });
+#endif
         },
         "    ObsModel (IEKF Build Jacobian)");
 

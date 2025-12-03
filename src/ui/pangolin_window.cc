@@ -12,20 +12,31 @@ bool PangolinWindow::Init() {
     impl_->current_scan_need_update_.store(false);
 
     bool inited = impl_->Init();
-    // 创建渲染线程
+#ifdef __APPLE__
+    // macOS: UI must run on main thread, don't create render thread
+    // User needs to call RenderOnce() periodically
+#else
+    // Linux: create render thread as before
     if (inited) {
         impl_->render_thread_ = std::thread([this]() { impl_->Render(); });
     }
+#endif
     return inited;
 }
 
 void PangolinWindow::Reset(const std::vector<Keyframe::Ptr>& keyframes) { impl_->Reset(keyframes); }
 
 void PangolinWindow::Quit() {
+#ifdef __APPLE__
+    // macOS: no render thread to join
+    impl_->exit_flag_.store(true);
+#else
+    // Linux: wait for render thread to finish
     if (impl_->render_thread_.joinable()) {
         impl_->exit_flag_.store(true);
         impl_->render_thread_.join();
     }
+#endif
     impl_->DeInit();
 }
 
@@ -90,6 +101,8 @@ void PangolinWindow::UpdateKF(std::shared_ptr<Keyframe> kf) {
 void PangolinWindow::SetCurrentScanSize(int current_scan_size) { impl_->max_size_of_current_scan_ = current_scan_size; }
 
 void PangolinWindow::SetTImuLidar(const SE3& T_imu_lidar) { impl_->T_imu_lidar_ = T_imu_lidar; }
+
+void PangolinWindow::RenderOnce() { impl_->RenderOnce(); }
 
 bool PangolinWindow::ShouldQuit() { return pangolin::ShouldQuit(); }
 

@@ -4,7 +4,9 @@
 #pragma once
 
 #include <glog/logging.h>
+#ifndef __APPLE__
 #include <execution>
+#endif
 #include <list>
 #include <thread>
 #include <unordered_map>
@@ -243,14 +245,24 @@ bool IVox<dim, node_type, PointType>::GetClosestPoint(const PointVector& cloud, 
     }
     closest_cloud.resize(cloud.size());
 
+#ifdef __APPLE__
+#pragma omp parallel for
+    for (size_t i = 0; i < index.size(); ++i) {
+        size_t idx = index[i];
+#else
     std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&cloud, &closest_cloud, this](size_t idx) {
+#endif
         PointType pt;
         if (GetClosestPoint(cloud[idx], pt)) {
             closest_cloud[idx] = pt;
         } else {
             closest_cloud[idx] = PointType();
         }
+#ifdef __APPLE__
+    }
+#else
     });
+#endif
     return true;
 }
 

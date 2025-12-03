@@ -4,7 +4,9 @@
 
 #include <glog/logging.h>
 
+#ifndef __APPLE__
 #include <execution>
+#endif
 #include "core/graph/edge.h"
 #include "core/graph/vertex.h"
 #include "utils/timer.h"
@@ -372,7 +374,13 @@ bool BlockSolver<Traits>::Solve() {
     std::vector<std::mutex> mutex_b(num_landmarks_);
     std::vector<std::mutex> mutex_H(num_poses_ * num_poses_);
 
+#ifdef __APPLE__
+    #pragma omp parallel for
+    for (size_t idx = 0; idx < landmark_idx_vec.size(); ++idx) {
+        int landmarkIndex = landmark_idx_vec[idx];
+#else
     std::for_each(std::execution::par_unseq, landmark_idx_vec.begin(), landmark_idx_vec.end(), [&](int landmarkIndex) {
+#endif
         const typename SparseBlockMatrix<LandmarkMatrixType>::IntBlockMap& marginalizeColumn =
             Hll_->BlockCols()[landmarkIndex];
         assert(marginalizeColumn.size() == 1 && "more than one Block in _Hll column");
@@ -435,7 +443,11 @@ bool BlockSolver<Traits>::Solve() {
                 (*Hi1i2).noalias() -= BDinv * Bj->transpose();
             }
         }
+#ifdef __APPLE__
+    }
+#else
     });
+#endif
 
     memcpy(b_schur_.data(), b_.data(), size_poses_ * sizeof(double));
     for (int i = 0; i < size_poses_; ++i) {
@@ -484,25 +496,73 @@ bool BlockSolver<Traits>::BuildSystem() {
 
     if (config_.parallel_) {
         // clear b vector
+#ifdef __APPLE__
+        #pragma omp parallel for
+        for (size_t i = 0; i < optimizer_->IndexMapping().size(); ++i) {
+            const auto& v = optimizer_->IndexMapping()[i];
+            v->ClearQuadraticForm();
+        }
+#else
         std::for_each(std::execution::par_unseq, optimizer_->IndexMapping().begin(), optimizer_->IndexMapping().end(),
                       [](const auto& v) { v->ClearQuadraticForm(); });
+#endif
 
+#ifdef __APPLE__
+        #pragma omp parallel for
+        for (size_t i = 0; i < optimizer_->ActiveEdges().size(); ++i) {
+            const auto& e = optimizer_->ActiveEdges()[i];
+            /// 线性化，计算jacobian，可以并行
+            e->LinearizeOplus();
+            // 求AtA 和 AtB ，这个也可以并行，但需要锁每个block
+            e->ConstructQuadraticForm();
+            // 将边的Hessian拷回大的hessian阵
+            e->CopyHessianToSolver();
+        }
+#else
         std::for_each(std::execution::par_unseq, optimizer_->ActiveEdges().begin(), optimizer_->ActiveEdges().end(),
                       [](const auto& e) {
-                          /// 线性化，计算jacobian，可以并行
-                          e->LinearizeOplus();
-                          // 求AtA 和 AtB ，这个也可以并行，但需要锁每个block
-                          e->ConstructQuadraticForm();
-                          // 将边的Hessian拷回大的hessian阵
-                          e->CopyHessianToSolver();
-                      });
+            /// 线性化，计算jacobian，可以并行
+            e->LinearizeOplus();
+            // 求AtA 和 AtB ，这个也可以并行，但需要锁每个block
+            e->ConstructQuadraticForm();
+            // 将边的Hessian拷回大的hessian阵
+            e->CopyHessianToSolver();
+        });
+#endif
 
         // 将顶点的hessian拷回大的hessian阵
+#ifdef __APPLE__
+        #pragma omp parallel for
+        for (size_t i = 0; i < optimizer_->ActiveVertices().size(); ++i) {
+            const auto& v = optimizer_->ActiveVertices()[i];
+            v->CopyHessianToSolver();
+        }
+#else
         std::for_each(std::execution::par_unseq, optimizer_->ActiveVertices().begin(),
                       optimizer_->ActiveVertices().end(), [](const auto& v) { v->CopyHessianToSolver(); });
+#endif
 
     } else {
         // clear b vector
+#ifdef __APPLE__
+        for (const auto& v : optimizer_->IndexMapping()) {
+            v->ClearQuadraticForm();
+        }
+
+        for (const auto& e : optimizer_->ActiveEdges()) {
+            /// 线性化，计算jacobian，可以并行
+            e->LinearizeOplus();
+            // 求AtA 和 AtB ，这个也可以并行，但需要锁每个block
+            e->ConstructQuadraticForm();
+            // 将边的Hessian拷回大的hessian阵
+            e->CopyHessianToSolver();
+        }
+
+        // 将顶点的hessian拷回大的hessian阵
+        for (const auto& v : optimizer_->ActiveVertices()) {
+            v->CopyHessianToSolver();
+        }
+#else
         std::for_each(std::execution::seq, optimizer_->IndexMapping().begin(), optimizer_->IndexMapping().end(),
                       [](const auto& v) { v->ClearQuadraticForm(); });
 
@@ -518,7 +578,10 @@ bool BlockSolver<Traits>::BuildSystem() {
 
         // 将顶点的hessian拷回大的hessian阵
         std::for_each(std::execution::seq, optimizer_->ActiveVertices().begin(), optimizer_->ActiveVertices().end(),
-                      [](const auto& v) { v->CopyHessianToSolver(); });
+                      [](const auto& v) {
+            v->CopyHessianToSolver();
+        });
+#endif
     }
 
     // flush the current system in a sparse block matrix

@@ -1,5 +1,7 @@
 #include "pointcloud_preprocess.h"
+#ifndef __APPLE__
 #include <execution>
+#endif
 
 #include <glog/logging.h>
 
@@ -44,7 +46,13 @@ void PointCloudPreprocess::Process(const livox_ros_driver2::msg::CustomMsg::Shar
         index[i] = i + 1;  // 从1开始
     }
 
+#ifdef __APPLE__
+    #pragma omp parallel for
+    for (size_t idx = 0; idx < index.size(); ++idx) {
+        uint i = index[idx];
+#else
     std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](const uint &i) {
+#endif
         if ((msg->points[i].line < num_scans_) &&
             ((msg->points[i].tag & 0x30) == 0x10 || (msg->points[i].tag & 0x30) == 0x00)) {
             if (i % point_filter_num_ == 0) {
@@ -66,7 +74,11 @@ void PointCloudPreprocess::Process(const livox_ros_driver2::msg::CustomMsg::Shar
                 }
             }
         }
+#ifdef __APPLE__
+    }
+#else
     });
+#endif
 
     for (uint i = 1; i < plsize; i++) {
         if (is_valid_pt[i]) {

@@ -2,6 +2,23 @@ cmake_minimum_required(VERSION 3.16)
 
 project(lightning)
 
+if(APPLE)
+    # The default RoboStack glog needs this specific fix to link correctly
+    add_definitions("-DGLOG_USE_GLOG_EXPORT")
+
+    set(GLOG_LIB "$ENV{CONDA_PREFIX}/lib/libglog.dylib")
+
+    set(GLOG_LIBRARY_DIRS "$ENV{CONDA_PREFIX}/lib")
+    set(GLOG_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include")
+    include_directories(SYSTEM ${GLOG_INCLUDE_DIRS})
+    link_directories(${GLOG_LIBRARY_DIRS})
+    message(STATUS "Patching GLOG for macOS (Apple Silicon)")
+
+    set(GLOG_LIB "$ENV{CONDA_PREFIX}/lib/libglog.dylib")
+else()
+    set(GLOG_LIB glog)
+endif()
+
 # Default to C++17
 if (NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 17)

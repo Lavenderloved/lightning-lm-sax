@@ -26,12 +26,15 @@ if (OPENMP_FOUND)
 endif ()
 
 if (BUILD_WITH_MARCH_NATIVE)
-    add_compile_options(-march=native)
+        add_compile_options(-march=native)
 else ()
-    add_definitions(-msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2")
+    # SSE 指令仅适用于 x86/x64 架构
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+        add_definitions(-msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2")
+    endif()
 endif ()
-
+        
 include_directories(
         ${OpenCV_INCLUDE_DIRS}
         ${PCL_INCLUDE_DIRS}
@@ -62,7 +65,8 @@ set(third_party_libs
         ${PCL_LIBRARIES}
         ${OpenCV_LIBS}
         ${Pangolin_LIBRARIES}
-        glog gflags
+        ${GLOG_LIB}
+        gflags
         ${yaml-cpp_LIBRARIES}
         ${pcl_conversions_LIBRARIES}
         tbb

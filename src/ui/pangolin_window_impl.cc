@@ -19,8 +19,28 @@ bool PangolinWindowImpl::Init() {
     // opengl buffer
     AllocateBuffer();
 
-    // unset the current context from the main thread
+#ifdef __APPLE__
+    // macOS: keep context on main thread, setup UI here
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // menu
+    pangolin::CreatePanel("menu").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(menu_width_));
+    pangolin::Var<bool> menu_follow_loc("menu.Follow", false, true);
+    pangolin::Var<bool> menu_draw_frontend_traj("menu.Draw Frontend Traj", true, true);
+    pangolin::Var<bool> menu_draw_backend_traj("menu.Draw Backend Traj", false, true);
+    pangolin::Var<bool> menu_reset_3d_view("menu.Reset 3D View", false, false);
+    pangolin::Var<bool> menu_reset_front_view("menu.Set to front View", false, false);
+    pangolin::Var<bool> menu_step("menu.Step", false, false);
+    pangolin::Var<float> menu_play_speed("menu.Play speed", 10.0, 0.1, 10.0);
+    pangolin::Var<float> menu_intensity("menu.intensity", 0.5, 0.0, 1.0);
+    
+    // display layout
+    CreateDisplayLayout();
+#else
+    // Linux: unset context, will bind in render thread
     pangolin::GetBoundWindow()->RemoveCurrent();
+#endif
 
     // 雷达定位轨迹opengl设置
     traj_newest_state_.reset(new ui::UiTrajectory(Vec3f(1.0, 0.0, 0.0)));  // 红色
@@ -35,6 +55,7 @@ bool PangolinWindowImpl::Init() {
     log_confidence_.SetLabels(std::vector<std::string>{"lidar loc confidence"});
     log_error_.SetLabels(std::vector<std::string>{"err v", "err h", "err eval v", "err eval h"});
 
+    exit_flag_.store(false);
     return true;
 }
 
@@ -65,6 +86,10 @@ void PangolinWindowImpl::Reset(const std::vector<Keyframe::Ptr> &keyframes) {
 
 bool PangolinWindowImpl::DeInit() {
     ReleaseBuffer();
+#ifdef __APPLE__
+    // macOS: destroy window on main thread
+    pangolin::DestroyWindow(GetWindowName());
+#endif
     return true;
 }
 
@@ -333,6 +358,30 @@ void PangolinWindowImpl::CreateDisplayLayout() {
         .SetBounds(0.0, 1.0, pangolin::Attach::Pix(menu_width_), 1.0)
         .AddDisplay(d_cam3d)
         .AddDisplay(d_plot);
+}
+
+void PangolinWindowImpl::RenderOnce() {
+    if (pangolin::ShouldQuit() || exit_flag_) {
+        return;
+    }
+    
+    // Clear entire screen
+    glClearColor(20.0 / 255.0, 20.0 / 255.0, 20.0 / 255.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Render pointcloud
+    RenderClouds();
+
+    // 处理相机跟随问题
+    if (following_loc_) {
+        Eigen::Vector3d translation = newest_frontend_pose_.translation();
+        Sophus::SE3d newest_frontend_pose_new(Eigen::Quaterniond::Identity(),
+                                              Eigen::Vector3d(translation.x(), translation.y(), 0.0));
+        s_cam_main_.Follow(newest_frontend_pose_new.matrix());
+    }
+
+    // Swap frames and Process Events
+    pangolin::FinishFrame();
 }
 
 void PangolinWindowImpl::Render() {

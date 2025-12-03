@@ -10,7 +10,9 @@
 #include "core/robust_kernel/robust_kernel.h"
 
 #include <glog/logging.h>
+#ifndef __APPLE__
 #include <execution>
+#endif
 
 namespace lightning::miao {
 
@@ -242,18 +244,42 @@ void Optimizer::SetAlgorithm(std::shared_ptr<OptimizationAlgorithm> algorithm) {
 }
 
 void Optimizer::Push() {
+#ifdef __APPLE__
+    #pragma omp parallel for
+    for (size_t i = 0; i < active_vertices_.size(); ++i) {
+        auto v = active_vertices_[i];
+        v->Push();
+    }
+#else
     std::for_each(std::execution::par_unseq, active_vertices_.begin(), active_vertices_.end(),
                   [](const auto &v) { v->Push(); });
+#endif
 }
 
 void Optimizer::Pop() {
+#ifdef __APPLE__
+    #pragma omp parallel for
+    for (size_t i = 0; i < active_vertices_.size(); ++i) {
+        auto v = active_vertices_[i];
+        v->Pop();
+    }
+#else
     std::for_each(std::execution::par_unseq, active_vertices_.begin(), active_vertices_.end(),
                   [](const auto &v) { v->Pop(); });
+#endif
 }
 
 void Optimizer::DiscardTop() {
+#ifdef __APPLE__
+    #pragma omp parallel for
+    for (size_t i = 0; i < active_vertices_.size(); ++i) {
+        auto v = active_vertices_[i];
+        v->DiscardTop();
+    }
+#else
     std::for_each(std::execution::par_unseq, active_vertices_.begin(), active_vertices_.end(),
                   [](const auto &v) { v->DiscardTop(); });
+#endif
 }
 
 void Optimizer::Clear() {

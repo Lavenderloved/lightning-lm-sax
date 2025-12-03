@@ -45,8 +45,11 @@ class PangolinWindowImpl {
     /// 注销
     bool DeInit();
 
-    /// 渲染所有信息
+    /// 渲染所有信息（线程循环模式）
     void Render();
+
+    /// 渲染一帧（主线程模式，用于macOS）
+    void RenderOnce();
 
     /// 获取窗口名称
     std::string GetWindowName() const;

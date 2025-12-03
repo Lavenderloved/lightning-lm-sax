@@ -1,5 +1,9 @@
 #include <cassert>
 
+#ifndef __APPLE__
+#include <execution>
+#endif
+
 namespace lightning::miao {
 namespace internal {
 
@@ -192,6 +196,18 @@ void LinearSolverPCG<MatrixType>::Mult(const std::vector<int>& colBlockIndices, 
     // NOTE: 这个维度太小的时候，多线程反而不划算
     if (indices_by_row_.size() >= 200) {
         /// 上半角部分
+#ifdef __APPLE__
+        std::vector<std::pair<int, std::vector<MatAndIdx>>> rows_vec(indices_by_row_.begin(), indices_by_row_.end());
+        #pragma omp parallel for
+        for (size_t i = 0; i < rows_vec.size(); ++i) {
+            const int& destOffset = rows_vec[i].first;
+            for (const MatAndIdx& m : rows_vec[i].second) {
+                const int& srcOffset = m.idx_;
+                const auto& a = m.mat_;
+                internal::pcg_axpy(*a, src, srcOffset, dest, destOffset);
+            }
+        }
+#else
         std::for_each(std::execution::par_unseq, indices_by_row_.begin(), indices_by_row_.end(), [&](const auto& d) {
             const int& destOffset = d.first;
             for (const MatAndIdx& m : d.second) {
@@ -200,8 +216,21 @@ void LinearSolverPCG<MatrixType>::Mult(const std::vector<int>& colBlockIndices, 
                 internal::pcg_axpy(*a, src, srcOffset, dest, destOffset);
             }
         });
+#endif
 
         /// 下半角部分
+#ifdef __APPLE__
+        std::vector<std::pair<int, std::vector<MatAndIdx>>> cols_vec(indices_by_col_.begin(), indices_by_col_.end());
+        #pragma omp parallel for
+        for (size_t i = 0; i < cols_vec.size(); ++i) {
+            const int& destOffsetT = cols_vec[i].first;
+            for (const MatAndIdx& m : cols_vec[i].second) {
+                const int& srcOffsetT = m.idx_;
+                const auto& a = m.mat_;
+                internal::pcg_atxpy(*a, src, srcOffsetT, dest, destOffsetT);
+            }
+        }
+#else
         std::for_each(std::execution::par_unseq, indices_by_col_.begin(), indices_by_col_.end(), [&](const auto& d) {
             const int& destOffsetT = d.first;
             for (const MatAndIdx& m : d.second) {
@@ -210,10 +239,11 @@ void LinearSolverPCG<MatrixType>::Mult(const std::vector<int>& colBlockIndices, 
                 internal::pcg_atxpy(*a, src, srcOffsetT, dest, destOffsetT);
             }
         });
+#endif
 
     } else {
         /// 串行计算时不需要再区分上下半区
-        std::for_each(std::execution::seq, indices_by_row_.begin(), indices_by_row_.end(), [&](const auto& d) {
+        for (const auto& d : indices_by_row_) {
             for (const MatAndIdx& m : d.second) {
                 const int& srcOffset = m.idx_;
                 const int& destOffsetT = srcOffset;
@@ -226,7 +256,7 @@ void LinearSolverPCG<MatrixType>::Mult(const std::vector<int>& colBlockIndices, 
                 // destVec += *a.transpose() * srcVec (according to the sub-vector parts)
                 internal::pcg_atxpy(*a, src, srcOffsetT, dest, destOffsetT);
             }
-        });
+        }
     }
 }
 }  // namespace lightning::miao
